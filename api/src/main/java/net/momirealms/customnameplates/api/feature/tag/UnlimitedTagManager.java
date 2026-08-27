@@ -18,11 +18,15 @@
 package net.momirealms.customnameplates.api.feature.tag;
 
 import net.momirealms.customnameplates.api.CNPlayer;
+import net.momirealms.customnameplates.api.feature.JoinQuitListener;
 import net.momirealms.customnameplates.common.plugin.feature.Reloadable;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
-public interface UnlimitedTagManager extends Reloadable {
+/**
+ * An interface manages unlimited tags
+ */
+public interface UnlimitedTagManager extends Reloadable, JoinQuitListener {
 
     /**
      * Called every tick to update the state of tags.

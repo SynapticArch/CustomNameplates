@@ -33,25 +33,42 @@ import net.momirealms.customnameplates.api.storage.data.PlayerData;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public abstract class AbstractCNPlayer implements CNPlayer {
-
+/**
+ * Player instance adapted by CustomNameplates
+ */
+public abstract class AbstractCNPlayer<P> implements CNPlayer {
+    /**
+     * The CustomNameplates plugin
+     */
     protected final CustomNameplates plugin;
+    /**
+     * Player netty channel
+     */
     protected final Channel channel;
-
-    protected Object player;
+    /**
+     * Platform player instance
+     */
+    protected P player;
+    protected UUID uuid;
+    protected int entityId;
+    protected String name;
 
     private volatile boolean isLoaded = false;
     private volatile boolean tempPreviewing = false;
     private volatile boolean toggleablePreviewing = false;
 
-    private String equippedNameplate;
-    private String equippedBubble;
+    private String currentNameplate;
+    private String nameplateData;
+    private String currentBubble;
+    private String bubbleData;
 
     private final TeamView teamView = new TeamView();
 
@@ -67,8 +84,14 @@ public abstract class AbstractCNPlayer implements CNPlayer {
 
     private final Map<CNPlayer, Tracker> trackers = new WeakHashMap<>();
     private final ReadWriteLock trackerLock = new ReentrantReadWriteLock();
-    private final List<String> otherActionBarFeatures = new ArrayList<>();
+    private final Vector<String> otherActionBarFeatures = new Vector<>();
 
+    /**
+     * Creates a player instance
+     *
+     * @param plugin CustomNameplates plugin
+     * @param channel netty channel
+     */
     protected AbstractCNPlayer(CustomNameplates plugin, Channel channel) {
         this.plugin = plugin;
         this.channel = channel;
@@ -202,6 +225,9 @@ public abstract class AbstractCNPlayer implements CNPlayer {
         }
     }
 
+    /**
+     * Reload the player instance, clear caches
+     */
     public void reload() {
         cachedValues.clear();
         cachedRelationalValues.clear();
@@ -212,7 +238,12 @@ public abstract class AbstractCNPlayer implements CNPlayer {
         feature2Placeholders.clear();
     }
 
-    public void setPlayer(Object player) {
+    /**
+     * Sets the platform player instance on join
+     *
+     * @param player player
+     */
+    public void setPlayer(P player) {
         this.player = player;
     }
 
@@ -231,10 +262,20 @@ public abstract class AbstractCNPlayer implements CNPlayer {
         return player;
     }
 
+    /**
+     * Sets if the player data is loaded
+     *
+     * @param loaded loaded or not
+     */
     public void setLoaded(boolean loaded) {
         isLoaded = loaded;
     }
 
+    /**
+     * Sets if the player is temporarily previewing the nameplate
+     *
+     * @param previewing is previewing or not
+     */
     public void setTempPreviewing(boolean previewing) {
         this.tempPreviewing = previewing;
     }
@@ -244,6 +285,11 @@ public abstract class AbstractCNPlayer implements CNPlayer {
         return tempPreviewing;
     }
 
+    /**
+     * Sets if the player is using toggle command to preview his nameplate
+     *
+     * @param previewing is previewing or not
+     */
     public void setToggleablePreviewing(boolean previewing) {
         this.toggleablePreviewing = previewing;
     }
@@ -402,7 +448,12 @@ public abstract class AbstractCNPlayer implements CNPlayer {
                         return false;
                     }
                 } else {
-                    boolean satisfied = requirement.isSatisfied(this, this);
+                    boolean satisfied;
+                    try {
+                        satisfied = requirement.isSatisfied(this, this);
+                    } catch (Exception e) {
+                        satisfied = false;
+                    }
                     data.updateTicks(false);
                     data.data(satisfied);
                     if (!satisfied) {
@@ -410,7 +461,12 @@ public abstract class AbstractCNPlayer implements CNPlayer {
                     }
                 }
             } else {
-                boolean satisfied = requirement.isSatisfied(this, this);
+                boolean satisfied;
+                try {
+                    satisfied = requirement.isSatisfied(this, this);
+                } catch (Exception e) {
+                    satisfied = false;
+                }
                 data = new TimeStampData<>(satisfied, currentTicks, true);
                 cachedRequirements.put(requirement.countId(), data);
                 if (!satisfied) {
@@ -433,7 +489,12 @@ public abstract class AbstractCNPlayer implements CNPlayer {
                         return false;
                     }
                 } else {
-                    boolean satisfied = requirement.isSatisfied(this, another);
+                    boolean satisfied;
+                    try {
+                        satisfied = requirement.isSatisfied(this, another);
+                    } catch (Exception e) {
+                        satisfied = false;
+                    }
                     data.updateTicks(false);
                     data.data(satisfied);
                     if (!satisfied) {
@@ -441,7 +502,12 @@ public abstract class AbstractCNPlayer implements CNPlayer {
                     }
                 }
             } else {
-                boolean satisfied = requirement.isSatisfied(this, another);
+                boolean satisfied;
+                try {
+                    satisfied = requirement.isSatisfied(this, another);
+                } catch (Exception e) {
+                    satisfied = false;
+                }
                 data = new TimeStampData<>(satisfied, currentTicks, true);
                 innerMap.put(another, data);
                 if (!satisfied) {
@@ -541,43 +607,71 @@ public abstract class AbstractCNPlayer implements CNPlayer {
     }
 
     @Override
-    public String equippedBubble() {
-        if (equippedNameplate == null) return "none";
-        return equippedBubble;
+    public String currentBubble() {
+        if (currentNameplate == null) return "none";
+        return currentBubble;
     }
 
     @Override
-    public boolean equippedBubble(String equippedBubble) {
+    public boolean setCurrentBubble(String bubble) {
         if (!isLoaded()) return false;
-        if (!equippedBubble.equals(this.equippedBubble)) {
-            this.equippedBubble = equippedBubble;
+        this.currentBubble = bubble;
+        return true;
+    }
+
+    @Override
+    public String bubbleData() {
+        if (bubbleData == null) return "none";
+        return bubbleData;
+    }
+
+    @Override
+    public boolean setBubbleData(String bubble) {
+        if (!isLoaded()) return false;
+        this.currentBubble = bubble;
+        this.bubbleData = bubble;
+        return true;
+    }
+
+    @Override
+    public String currentNameplate() {
+        if (currentNameplate == null) return "none";
+        return currentNameplate;
+    }
+
+    @Override
+    public boolean setCurrentNameplate(String nameplate) {
+        if (!isLoaded()) return false;
+        if (!nameplate.equals(this.currentNameplate)) {
+            this.currentNameplate = nameplate;
         }
         return true;
     }
 
     @Override
-    public String equippedNameplate() {
-        if (equippedNameplate == null) return "none";
-        return equippedNameplate;
+    public String nameplateData() {
+        return nameplateData;
     }
 
     @Override
-    public boolean equippedNameplate(String equippedNameplate) {
+    public boolean setNameplateData(String nameplate) {
         if (!isLoaded()) return false;
-        if (!equippedNameplate.equals(this.equippedNameplate)) {
-            this.equippedNameplate = equippedNameplate;
-        }
+        this.nameplateData = nameplate;
+        this.currentNameplate = nameplate;
         return true;
     }
 
     @Override
     public void save() {
-        plugin.getStorageManager().dataSource().updatePlayerData(PlayerData.builder()
+        this.plugin.getStorageManager().dataSource().updatePlayerData(
+            PlayerData.builder()
                 .uuid(uuid())
-                .nameplate(equippedNameplate())
-                .bubble(equippedBubble())
+                .nameplate(nameplateData())
+                .bubble(bubbleData())
                 .previewTags(isToggleablePreviewing())
-                .build(), plugin.getScheduler().async());
+                .build(),
+            this.plugin.getScheduler().async()
+        );
     }
 
     @Override
@@ -596,5 +690,20 @@ public abstract class AbstractCNPlayer implements CNPlayer {
     @Override
     public int hashCode() {
         return entityID();
+    }
+
+    @Override
+    public String name() {
+        return Optional.ofNullable(this.name).orElse("");
+    }
+
+    @Override
+    public UUID uuid() {
+        return this.uuid;
+    }
+
+    @Override
+    public int entityID() {
+        return this.entityId;
     }
 }

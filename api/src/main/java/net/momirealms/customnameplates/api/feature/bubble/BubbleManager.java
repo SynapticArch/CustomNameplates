@@ -25,6 +25,10 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Collection;
 import java.util.Set;
 
+/**
+ * The BubbleManager interface is responsible for managing the configuration and display of Bubbles,
+ * including retrieving available Bubbles, managing Bubble configurations, and controlling display settings.
+ */
 public interface BubbleManager extends Reloadable {
 
     /**
@@ -58,6 +62,14 @@ public interface BubbleManager extends Reloadable {
      */
     @Nullable
     BubbleConfig bubbleConfigById(String id);
+
+    /**
+     * Retrieves a Bubble configuration by its command suggestion
+     *
+     * @param suggestion command suggestion
+     * @return the BubbleConfig instance, or null if not found
+     */
+    @Nullable BubbleConfig bubbleConfigByCommand(String suggestion);
 
     /**
      * Checks if a player has access to a specific Bubble by its ID.
@@ -124,6 +136,21 @@ public interface BubbleManager extends Reloadable {
      * @return the stay duration in ticks
      */
     int stayDuration();
+
+    /**
+     * Returns the additional duration (in ticks) added per visible character in the Bubble text.
+     *
+     * @return the duration per character in ticks
+     */
+    double durationPerCharacter();
+
+    /**
+     * Returns the maximum duration (in ticks) for which the Bubble remains visible.
+     * A value of 0 means no maximum.
+     *
+     * @return the maximum stay duration in ticks
+     */
+    int maxStayDuration();
 
     /**
      * Returns the duration (in ticks) for the Bubble to appear.

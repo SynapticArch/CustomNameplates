@@ -25,9 +25,10 @@
 
 package net.momirealms.customnameplates.bukkit;
 
-import net.kyori.adventure.audience.Audience;
-import net.kyori.adventure.platform.bukkit.BukkitAudiences;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.momirealms.customnameplates.api.helper.AdventureHelper;
+import net.momirealms.customnameplates.bukkit.util.Reflections;
 import net.momirealms.customnameplates.common.sender.Sender;
 import net.momirealms.customnameplates.common.sender.SenderFactory;
 import net.momirealms.customnameplates.common.util.Tristate;
@@ -39,11 +40,9 @@ import org.bukkit.entity.Player;
 import java.util.UUID;
 
 public class BukkitSenderFactory extends SenderFactory<BukkitCustomNameplates, CommandSender> {
-    private final BukkitAudiences audiences;
 
     public BukkitSenderFactory(BukkitCustomNameplates plugin) {
         super(plugin);
-        this.audiences = BukkitAudiences.create(plugin.getBootstrap());
     }
 
     @Override
@@ -63,17 +62,16 @@ public class BukkitSenderFactory extends SenderFactory<BukkitCustomNameplates, C
     }
 
     @Override
-    public Audience getAudience(CommandSender sender) {
-        return this.audiences.sender(sender);
-    }
-
-    @Override
     protected void sendMessage(CommandSender sender, Component message) {
-        // we can safely send async for players and the console - otherwise, send it sync
-        if (sender instanceof Player || sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender) {
-            getAudience(sender).sendMessage(message);
+        if (sender instanceof Player player) {
+            try {
+                Object packet = Reflections.constructor$ClientboundSystemChatPacket.newInstance(getPlugin().getPlatform().jsonToMinecraftComponent(AdventureHelper.gson().serialize(message)), false);
+                getPlugin().getPacketSender().sendPacket(getPlugin().getPlayer(player.getUniqueId()), packet);
+            } catch (ReflectiveOperationException e) {
+                getPlugin().getPluginLogger().warn("Failed to send message to player " + sender.getName(), e);
+            }
         } else {
-            getPlugin().getScheduler().executeSync(() -> getAudience(sender).sendMessage(message));
+            sender.sendMessage(LegacyComponentSerializer.legacySection().serialize(message));
         }
     }
 
@@ -106,6 +104,5 @@ public class BukkitSenderFactory extends SenderFactory<BukkitCustomNameplates, C
     @Override
     public void close() {
         super.close();
-        this.audiences.close();
     }
 }

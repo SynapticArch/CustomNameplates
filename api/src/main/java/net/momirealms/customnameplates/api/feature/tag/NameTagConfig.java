@@ -20,8 +20,13 @@ package net.momirealms.customnameplates.api.feature.tag;
 import net.momirealms.customnameplates.api.feature.CarouselText;
 import net.momirealms.customnameplates.api.requirement.Requirement;
 import net.momirealms.customnameplates.api.util.Alignment;
+import net.momirealms.customnameplates.api.util.Billboard;
 import net.momirealms.customnameplates.api.util.Vector3;
+import net.momirealms.customnameplates.common.util.Tristate;
 
+/**
+ * NameTag Configuration
+ */
 public interface NameTagConfig {
 
     /**
@@ -74,11 +79,17 @@ public interface NameTagConfig {
     boolean hasShadow();
 
     /**
+     * Gets the billboard
+     *
+     * @return billboard
+     */
+    Billboard billboard();
+
+    /**
      * Checks if the name tag is see-through.
      *
-     * @return true if the name tag is see-through, false otherwise
      */
-    boolean isSeeThrough();
+    Tristate isSeeThrough();
 
     /**
      * Checks if the default background color is used.
@@ -241,7 +252,7 @@ public interface NameTagConfig {
          * @param seeThrough true if the name tag is see-through, false otherwise
          * @return the builder instance
          */
-        Builder seeThrough(boolean seeThrough);
+        Builder seeThrough(Tristate seeThrough);
 
         /**
          * Sets whether the name tag uses the default background color.
@@ -258,6 +269,14 @@ public interface NameTagConfig {
          * @return the builder instance
          */
         Builder alignment(Alignment alignment);
+
+        /**
+         * Sets the billboard of the name tag
+         *
+         * @param billboard billboard
+         * @return the builder instance
+         */
+        Builder billboard(Billboard billboard);
 
         /**
          * Sets the view range for the name tag.

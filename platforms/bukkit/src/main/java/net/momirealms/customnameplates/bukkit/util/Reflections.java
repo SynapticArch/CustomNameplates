@@ -28,7 +28,9 @@ import java.util.*;
 
 import static java.util.Objects.requireNonNull;
 
-public class Reflections {
+public final class Reflections {
+
+    public static void load() {}
 
     public static final Class<?> clazz$Component = requireNonNull(
             ReflectionUtils.getClazz(
@@ -121,6 +123,12 @@ public class Reflections {
             ReflectionUtils.getDeclaredField(
                     clazz$ClientboundSystemChatPacket, String.class, 0
             );
+
+    public static final Constructor<?> constructor$ClientboundSystemChatPacket = requireNonNull(
+            ReflectionUtils.getConstructor(
+                    clazz$ClientboundSystemChatPacket, clazz$Component, boolean.class
+            )
+    );
 
     public static final Class<?> clazz$CraftChatMessage = requireNonNull(
             ReflectionUtils.getClazz(
@@ -274,7 +282,7 @@ public class Reflections {
         try {
             Field field = ReflectionUtils.getDeclaredField(
                     clazz$ClientboundBossEventPacket,
-                    "f", "REMOVE_OPERATION");
+                    VersionHelper.isVersionNewerThan1_20_5() ? "g" : "f", "REMOVE_OPERATION");
             field.setAccessible(true);
             instance$ClientboundBossEventPacket$REMOVE_OPERATION = requireNonNull(field.get(null));
         } catch (IllegalAccessException e) {
@@ -315,28 +323,9 @@ public class Reflections {
         }
     }
 
-    public static final Class<?> clazz$Component$Serializer = requireNonNull(
-            ReflectionUtils.getClazz(
-                    BukkitReflectionUtils.assembleMCClass("network.chat.Component$Serializer"),
-                    BukkitReflectionUtils.assembleMCClass("network.chat.IChatBaseComponent$ChatSerializer")
-            )
-    );
-
     public static final Class<?> clazz$HolderLookup$Provider = ReflectionUtils.getClazz(
             BukkitReflectionUtils.assembleMCClass("core.HolderLookup$Provider"),
-            BukkitReflectionUtils.assembleMCClass("core.HolderLookup$b")
-    );
-
-    public static final Method method$Component$Serializer$fromJson = ReflectionUtils.getMethod(
-            clazz$Component$Serializer,
-            new String[] { "fromJson" },
-            String.class, clazz$HolderLookup$Provider
-    );
-
-    public static final Method method$Component$Serializer$toJson = ReflectionUtils.getMethod(
-            clazz$Component$Serializer,
-            new String[] { "toJson" },
-            clazz$Component, clazz$HolderLookup$Provider
+            BukkitReflectionUtils.assembleMCClass(VersionHelper.isVersionNewerThan1_20_5() ? "core.HolderLookup$a" : "core.HolderLookup$b")
     );
 
     public static final Class<?> clazz$ClientboundBundlePacket = requireNonNull(
@@ -478,34 +467,6 @@ public class Reflections {
             )
     );
 
-    public static final Field field$EntityType$TEXT_DISPLAY;
-
-    static {
-        if (VersionHelper.isVersionNewerThan1_20_5()) {
-            field$EntityType$TEXT_DISPLAY = ReflectionUtils.getDeclaredField(
-                    clazz$EntityType,
-                    "TEXT_DISPLAY", "bb");
-        } else if (VersionHelper.isVersionNewerThan1_20_4()) {
-            field$EntityType$TEXT_DISPLAY = ReflectionUtils.getDeclaredField(
-                    clazz$EntityType,
-                    "TEXT_DISPLAY", "aY");
-        } else {
-            field$EntityType$TEXT_DISPLAY = ReflectionUtils.getDeclaredField(
-                    clazz$EntityType,
-                    "TEXT_DISPLAY", "aX");
-        }
-    }
-
-    public static final Object instance$EntityType$TEXT_DISPLAY;
-
-    static {
-        try {
-            instance$EntityType$TEXT_DISPLAY = field$EntityType$TEXT_DISPLAY.get(clazz$EntityType);
-        } catch (IllegalAccessException e) {
-            throw new AssertionError(e);
-        }
-    }
-
     public static final Constructor<?> constructor$ClientboundAddEntityPacket = requireNonNull(
             ReflectionUtils.getConstructor(clazz$ClientboundAddEntityPacket,
                     int.class, UUID.class,
@@ -601,7 +562,7 @@ public class Reflections {
     public static final Class<?> clazz$SynchedEntityData$DataValue = requireNonNull(
             ReflectionUtils.getClazz(
                     BukkitReflectionUtils.assembleMCClass("network.syncher.SynchedEntityData$DataValue"),
-                    BukkitReflectionUtils.assembleMCClass("network.syncher.DataWatcher$b")
+                    BukkitReflectionUtils.assembleMCClass(VersionHelper.isVersionNewerThan1_20_5() ? "network.syncher.DataWatcher$c" : "network.syncher.DataWatcher$b")
             )
     );
 
@@ -918,7 +879,8 @@ public class Reflections {
     public static final Class<?> clazz$ResourceLocation = requireNonNull(
             ReflectionUtils.getClazz(
                     BukkitReflectionUtils.assembleMCClass("resources.ResourceLocation"),
-                    BukkitReflectionUtils.assembleMCClass("resources.MinecraftKey")
+                    BukkitReflectionUtils.assembleMCClass("resources.MinecraftKey"),
+                    BukkitReflectionUtils.assembleMCClass("resources.Identifier")
             )
     );
 
@@ -1061,11 +1023,39 @@ public class Reflections {
             )
     );
 
-    public static final Field field$ClientboundSetPlayerTeamPacket$Parameters$nametagVisibility = requireNonNull(
-            ReflectionUtils.getInstanceDeclaredField(
-                    clazz$ClientboundSetPlayerTeamPacket$Parameters, String.class, 0
+    public static final Class<?> clazz$Team$Visibility = requireNonNull(
+            ReflectionUtils.getClazz(
+                    BukkitReflectionUtils.assembleMCClass("world.scores.ScoreboardTeamBase$EnumNameTagVisibility"),
+                    BukkitReflectionUtils.assembleMCClass("world.scores.Team$Visibility")
             )
     );
+
+    public static final Field field$ClientboundSetPlayerTeamPacket$Parameters$nametagVisibility = requireNonNull(
+            VersionHelper.isVersionNewerThan1_21_5() ?
+                    ReflectionUtils.getInstanceDeclaredField(
+                            clazz$ClientboundSetPlayerTeamPacket$Parameters, clazz$Team$Visibility, 0
+                    )
+                    : ReflectionUtils.getInstanceDeclaredField(
+                            clazz$ClientboundSetPlayerTeamPacket$Parameters, String.class, 0
+                    )
+    );
+
+    public static final Method method$Team$Visibility$values = requireNonNull(
+            ReflectionUtils.getStaticMethod(
+                    clazz$Team$Visibility, clazz$Team$Visibility.arrayType()
+            )
+    );
+
+    public static final Object instance$Team$Visibility$NEVER;
+
+    static {
+        try {
+            Object[] values = (Object[]) method$Team$Visibility$values.invoke(null);
+            instance$Team$Visibility$NEVER = values[1];
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public static final Class<?> clazz$ServerConnectionListener = requireNonNull(
             ReflectionUtils.getClazz(
@@ -1097,4 +1087,169 @@ public class Reflections {
         }
         field$ServerConnectionListener$channels = requireNonNull(f);
     }
+
+    public static final Class<?> clazz$AttributeModifier$Operation = requireNonNull(
+            ReflectionUtils.getClazz(
+                    BukkitReflectionUtils.assembleMCClass("world.entity.ai.attributes.AttributeModifier$Operation")
+            )
+    );
+
+    public static final Method method$AttributeModifier$Operation$values = requireNonNull(
+            ReflectionUtils.getStaticMethod(
+                    clazz$AttributeModifier$Operation, clazz$AttributeModifier$Operation.arrayType()
+            )
+    );
+
+    public static final Object instance$AttributeModifier$Operation$ADD_VALUE;
+    public static final Object instance$AttributeModifier$Operation$ADD_MULTIPLIED_BASE;
+    public static final Object instance$AttributeModifier$Operation$ADD_MULTIPLIED_TOTAL;
+
+    static {
+        try {
+            Object[] values = (Object[]) method$AttributeModifier$Operation$values.invoke(null);
+            instance$AttributeModifier$Operation$ADD_VALUE = values[0];
+            instance$AttributeModifier$Operation$ADD_MULTIPLIED_BASE = values[1];
+            instance$AttributeModifier$Operation$ADD_MULTIPLIED_TOTAL = values[2];
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    public static final Field field$AttributeModifier$operation = requireNonNull(
+            ReflectionUtils.getDeclaredField(
+                    clazz$AttributeModifier, clazz$AttributeModifier$Operation, 0
+            )
+    );
+
+    public static final Method method$ResourceLocation$fromNamespaceAndPath = requireNonNull(
+            ReflectionUtils.getStaticMethod(
+                    clazz$ResourceLocation, clazz$ResourceLocation, String.class, String.class
+            )
+    );
+
+    public static final Object instance$BuiltInRegistries$ENTITY_TYPE;
+    public static final Object instance$Registries$ENTITY_TYPE;
+    public static final Object instance$registryAccess;
+
+    static {
+        Field[] fields = clazz$Registries.getDeclaredFields();
+        try {
+            Object registries$EntityType  = null;
+            for (Field field : fields) {
+                Type fieldType = field.getGenericType();
+                if (fieldType instanceof ParameterizedType paramType) {
+                    if (paramType.getRawType() == clazz$ResourceKey) {
+                        Type[] actualTypeArguments = paramType.getActualTypeArguments();
+                        if (actualTypeArguments.length == 1 && actualTypeArguments[0] instanceof ParameterizedType registryType) {
+                            Type type = registryType.getActualTypeArguments()[0];
+                            if (type instanceof  ParameterizedType parameterizedType) {
+                                Type rawType = parameterizedType.getRawType();
+                                if (rawType == clazz$EntityType) {
+                                    registries$EntityType = field.get(null);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            instance$Registries$ENTITY_TYPE = requireNonNull(registries$EntityType);
+            Object server = method$MinecraftServer$getServer.invoke(null);
+            Object registries = field$MinecraftServer$registries.get(server);
+            instance$registryAccess = field$LayeredRegistryAccess$composite.get(registries);
+            instance$BuiltInRegistries$ENTITY_TYPE = method$RegistryAccess$registryOrThrow.invoke(instance$registryAccess, registries$EntityType);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static final Method method$Registry$get = requireNonNull(
+            ReflectionUtils.getMethods(
+                    clazz$Registry, Object.class, clazz$ResourceLocation
+            ).stream().filter(m -> m.getReturnType() != Optional.class).findAny().orElse(null)
+    );
+
+    public static final Object instance$EntityType$TEXT_DISPLAY;
+
+    static {
+        try {
+            Object textDisplay = method$ResourceLocation$fromNamespaceAndPath.invoke(null, "minecraft", "text_display");
+            instance$EntityType$TEXT_DISPLAY = Reflections.method$Registry$get.invoke(Reflections.instance$BuiltInRegistries$ENTITY_TYPE, textDisplay);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static final Class<?> clazz$AdventureComponent = requireNonNull(
+            ReflectionUtils.getClazz(
+                    "net{}kyori{}adventure{}text{}Component".replace("{}", ".")
+            )
+    );
+
+    // <= 1.20.4
+    public static final Field field$ClientboundSetActionBarTextPacket$adventure$text =
+            ReflectionUtils.getDeclaredField(
+                    clazz$ClientboundSetActionBarTextPacket, clazz$AdventureComponent, 0
+            );
+
+    public static final Class<?> clazz$ComponentSerializer = requireNonNull(
+            ReflectionUtils.getClazz(
+                    "net{}kyori{}adventure{}text{}serializer{}ComponentSerializer".replace("{}", ".")
+            )
+    );
+
+    public static final Class<?> clazz$GsonComponentSerializer = requireNonNull(
+            ReflectionUtils.getClazz(
+                    "net{}kyori{}adventure{}text{}serializer{}gson{}GsonComponentSerializer".replace("{}", ".")
+            )
+    );
+
+    public static final Class<?> clazz$GsonComponentSerializer$Builder = requireNonNull(
+            ReflectionUtils.getClazz(
+                    "net{}kyori{}adventure{}text{}serializer{}gson{}GsonComponentSerializer$Builder".replace("{}", ".")
+            )
+    );
+
+    public static final Method method$GsonComponentSerializer$builder = requireNonNull(
+            ReflectionUtils.getStaticMethod(
+                    clazz$GsonComponentSerializer, clazz$GsonComponentSerializer$Builder
+            )
+    );
+
+    public static final Method method$GsonComponentSerializer$Builder$build = requireNonNull(
+            ReflectionUtils.getMethod(
+                    clazz$GsonComponentSerializer$Builder, clazz$GsonComponentSerializer
+            )
+    );
+
+    public static final Method method$ComponentSerializer$serialize = requireNonNull(
+            ReflectionUtils.getMethod(
+                    clazz$ComponentSerializer, Object.class, new String[] {"serialize"}, clazz$AdventureComponent
+            )
+    );
+
+    public static final Method method$ComponentSerializer$deserialize = requireNonNull(
+            ReflectionUtils.getMethod(
+                    clazz$ComponentSerializer, Object.class, new String[] {"deserialize"}, Object.class
+            )
+    );
+
+    public static final Class<?> clazz$ClientboundLoginFinishedPacket = requireNonNull(
+            ReflectionUtils.getClazz(
+                    BukkitReflectionUtils.assembleMCClass("network.protocol.login.PacketLoginOutSuccess"),
+                    BukkitReflectionUtils.assembleMCClass("network.protocol.login.ClientboundLoginFinishedPacket"),
+                    BukkitReflectionUtils.assembleMCClass("network.protocol.login.ClientboundGameProfilePacket")
+            )
+    );
+
+    public static final Class<?> clazz$GameProfile = requireNonNull(
+            ReflectionUtils.getClazz("com.mojang.authlib.GameProfile")
+    );
+
+    public static final Field field$ClientboundLoginFinishedPacket$gameProfile = requireNonNull(
+            ReflectionUtils.getDeclaredField(clazz$ClientboundLoginFinishedPacket, clazz$GameProfile, 0)
+    );
+
+    public static final Field field$GameProfile$name = requireNonNull(
+            ReflectionUtils.getDeclaredField(clazz$GameProfile, String.class, 0)
+    );
 }

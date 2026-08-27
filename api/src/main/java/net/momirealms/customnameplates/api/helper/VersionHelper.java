@@ -28,11 +28,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /**
- * This class implements the VersionManager interface and is responsible for managing version-related information.
+ * VersionHelper is a utility class that provides methods for managing and checking version-related information,
+ * including plugin updates and server version details. It implements the VersionManager interface.
  */
 public class VersionHelper {
 
-    // Method to asynchronously check for plugin updates
+    /**
+     * A function to check for plugin updates asynchronously by comparing the plugin's current version with the latest version available.
+     */
     public static final Function<NameplatesPlugin, CompletableFuture<Boolean>> UPDATE_CHECKER = (plugin) -> {
         CompletableFuture<Boolean> updateFuture = new CompletableFuture<>();
         plugin.getScheduler().async().execute(() -> {
@@ -58,15 +61,20 @@ public class VersionHelper {
         return updateFuture;
     };
 
-    private static float version;
+    private static int version;
     private static boolean mojmap;
     private static boolean folia;
     private static boolean mohist;
     private static boolean paper;
 
+    /**
+     * Initializes version-specific settings based on the server version.
+     * This method checks if the server is running Mojmap, Folia, Mohist, or Paper.
+     *
+     * @param serverVersion The server version string.
+     */
     public static void init(String serverVersion) {
-        String[] split = serverVersion.split("\\.");
-        version = Float.parseFloat(split[1] + "." + (split.length == 3 ? split[2] : "0"));
+        version = parseVersionToInteger(serverVersion);
         checkMojMap();
         checkFolia();
         checkMohist();
@@ -75,12 +83,58 @@ public class VersionHelper {
         paper = paper && !isModdedServer;
     }
 
+    public static int parseVersionToInteger(String versionString) {
+        int v1 = 0;
+        int v2 = 0;
+        int v3 = 0;
+        int currentNumber = 0;
+        int part = 0;
+
+        for(int i = 0; i < versionString.length(); ++i) {
+            char c = versionString.charAt(i);
+            if (c >= '0' && c <= '9') {
+                currentNumber = currentNumber * 10 + (c - 48);
+            } else if (c == '.') {
+                if (part == 0) {
+                    v1 = currentNumber;
+                }
+
+                if (part == 1) {
+                    v2 = currentNumber;
+                }
+
+                ++part;
+                currentNumber = 0;
+                if (part > 2) {
+                    break;
+                }
+            }
+        }
+
+        if (part == 0) {
+            v1 = currentNumber;
+        } else if (part == 1) {
+            v2 = currentNumber;
+        } else if (part == 2) {
+            v3 = currentNumber;
+        }
+
+        return 10000 * v1 + v2 * 100 + v3;
+    }
+
+    /**
+     * Gets the current server version as a float.
+     *
+     * @return The server version as a float.
+     */
     public static float version() {
         return version;
     }
 
+    /**
+     * Checks if the server is running Mojmap.
+     */
     private static void checkMojMap() {
-        // Check if the server is Mojmap
         try {
             Class.forName("net.minecraft.network.protocol.game.ClientboundBossEventPacket");
             mojmap = true;
@@ -88,6 +142,9 @@ public class VersionHelper {
         }
     }
 
+    /**
+     * Checks if the server is running Folia.
+     */
     private static void checkFolia() {
         try {
             Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
@@ -96,6 +153,9 @@ public class VersionHelper {
         }
     }
 
+    /**
+     * Checks if the server is running Mohist.
+     */
     private static void checkMohist() {
         try {
             Class.forName("com.mohistmc.api.ServerAPI");
@@ -104,6 +164,9 @@ public class VersionHelper {
         }
     }
 
+    /**
+     * Checks if the server is running Paper or its forks.
+     */
     private static void checkPaper() {
         try {
             Class.forName("com.destroystokyo.paper.Metrics");
@@ -112,47 +175,138 @@ public class VersionHelper {
         }
     }
 
+    public static boolean isVersionNewerThan26_1() {
+        return version >= 260100;
+    }
+
+    public static boolean isVersionNewerThan26_2() {
+        return version >= 260200;
+    }
+
+    /**
+     * Checks if the server version is newer than 1.21.9
+     *
+     * @return True if the version is newer than 1.21.9, otherwise false.
+     */
+    public static boolean isVersionNewerThan1_21_9() {
+        return version >= 12109;
+    }
+
+    /**
+     * Checks if the server version is newer than 1.21.5
+     *
+     * @return True if the version is newer than 1.21.5, otherwise false.
+     */
+    public static boolean isVersionNewerThan1_21_5() {
+        return version >= 12105;
+    }
+
+    /**
+     * Checks if the server version is newer than 1.21.4
+     *
+     * @return True if the version is newer than 1.21.4, otherwise false.
+     */
+    public static boolean isVersionNewerThan1_21_4() {
+        return version >= 12104;
+    }
+
+    /**
+     * Checks if the server version is newer than 1.21.2.
+     *
+     * @return True if the version is newer than 1.21.2, otherwise false.
+     */
     public static boolean isVersionNewerThan1_21_2() {
-        return version >= 21.19;
+        return version >= 12102;
     }
 
+    /**
+     * Checks if the server version is newer than 1.20.5.
+     *
+     * @return True if the version is newer than 1.20.5, otherwise false.
+     */
     public static boolean isVersionNewerThan1_20_5() {
-        return version >= 20.49;
+        return version >= 12005;
     }
 
+    /**
+     * Checks if the server version is newer than 1.20.4.
+     *
+     * @return True if the version is newer than 1.20.4, otherwise false.
+     */
     public static boolean isVersionNewerThan1_20_4() {
-        return version >= 20.39;
+        return version >= 12004;
     }
 
+    /**
+     * Checks if the server version is newer than 1.19.4.
+     *
+     * @return True if the version is newer than 1.19.4, otherwise false.
+     */
     public static boolean isVersionNewerThan1_19_4() {
-        return version >= 19.39;
+        return version >= 11904;
     }
 
+    /**
+     * Checks if the server version is newer than 1.20.2.
+     *
+     * @return True if the version is newer than 1.20.2, otherwise false.
+     */
     public static boolean isVersionNewerThan1_20_2() {
-        return version >= 20.19;
+        return version >= 12002;
     }
 
+    /**
+     * Checks if the server version is newer than 1.20.
+     *
+     * @return True if the version is newer than 1.20, otherwise false.
+     */
     public static boolean isVersionNewerThan1_20() {
-        return version >= 20;
+        return version >= 12000;
     }
 
+    /**
+     * Checks if the server is running Folia.
+     *
+     * @return True if the server is running Folia, otherwise false.
+     */
     public static boolean isFolia() {
         return folia;
     }
 
+    /**
+     * Checks if the server is running Mohist.
+     *
+     * @return True if the server is running Mohist, otherwise false.
+     */
     public static boolean isMohist() {
         return mohist;
     }
 
+    /**
+     * Checks if the server is running Paper or its forks.
+     *
+     * @return True if the server is running Paper or its forks, otherwise false.
+     */
     public static boolean isPaperOrItsForks() {
         return paper;
     }
 
+    /**
+     * Checks if the server is using Mojmap.
+     *
+     * @return True if the server is using Mojmap, otherwise false.
+     */
     public static boolean isMojmap() {
         return mojmap;
     }
 
-    // Method to compare two version strings
+    /**
+     * Compares two version strings to determine if the first version is newer than the second.
+     *
+     * @param newV The new version string.
+     * @param currentV The current version string.
+     * @return True if the new version is newer than the current version, otherwise false.
+     */
     private static boolean compareVer(String newV, String currentV) {
         if (newV == null || currentV == null || newV.isEmpty() || currentV.isEmpty()) {
             return false;
@@ -170,31 +324,11 @@ public class VersionHelper {
                     return true;
                 } else if (newNum < currentNum) {
                     return false;
-                } else if (newPart.length > 1 && currentPart.length > 1) {
-                    String[] newHotfix = newPart[1].split("(?<=\\D)(?=\\d)|(?<=\\d)(?=\\D)");
-                    String[] currentHotfix = currentPart[1].split("(?<=\\D)(?=\\d)|(?<=\\d)(?=\\D)");
-                    if (newHotfix.length == 2 && currentHotfix.length == 1) return true;
-                    else if (newHotfix.length > 1 && currentHotfix.length > 1) {
-                        int newHotfixNum = Integer.parseInt(newHotfix[1]);
-                        int currentHotfixNum = Integer.parseInt(currentHotfix[1]);
-                        if (newHotfixNum > currentHotfixNum) {
-                            return true;
-                        } else if (newHotfixNum < currentHotfixNum) {
-                            return false;
-                        } else {
-                            return newHotfix[0].compareTo(currentHotfix[0]) > 0;
-                        }
-                    }
-                } else if (newPart.length > 1) {
-                    return true;
-                } else if (currentPart.length > 1) {
-                    return false;
                 }
-            }
-            catch (NumberFormatException ignored) {
-                return false;
+            } catch (NumberFormatException e) {
+                // handle error
             }
         }
-        return newVS.length > currentVS.length;
+        return false;
     }
 }

@@ -182,6 +182,7 @@ public class BukkitNetworkManager implements PacketSender, PipelineInjector {
     @Override
     public void sendPacket(@NotNull CNPlayer player, final List<Object> packet) {
         if (!player.isOnline()) return;
+        if (packet.isEmpty()) return;
         packetsConsumer.accept(player, packet);
     }
 
@@ -210,14 +211,10 @@ public class BukkitNetworkManager implements PacketSender, PipelineInjector {
     }
 
     public void handleDisconnection(Channel channel) {
-        CNPlayer user = removeUser(channel);
-        if (user == null) return;
-        channel.eventLoop().submit(() -> {
-            if (channel.pipeline().get(NAMEPLATES_PACKET_HANDLER_NAME) != null) {
-                channel.pipeline().remove(NAMEPLATES_PACKET_HANDLER_NAME);
-            }
-            return null;
-        });
+        if (channel.pipeline().get(NAMEPLATES_PACKET_HANDLER_NAME) != null) {
+            channel.pipeline().remove(NAMEPLATES_PACKET_HANDLER_NAME);
+        }
+        removeUser(channel);
     }
 
     public void injectChannel(Channel channel, ConnectionState connectionState) {
@@ -292,20 +289,17 @@ public class BukkitNetworkManager implements PacketSender, PipelineInjector {
 
         @Override
         public void write(ChannelHandlerContext context, Object packet, ChannelPromise channelPromise) throws Exception {
+            PacketEvent event = new PacketEvent(packet);
             try {
-                PacketEvent event = new PacketEvent(packet);
                 plugin.getPlatform().onPacketSend(player, event);
-                if (event.cancelled()) return;
-                super.write(context, packet, channelPromise);
-                channelPromise.addListener((p) -> {
-                    for (Runnable task : event.getDelayedTasks()) {
-                        task.run();
-                    }
-                });
             } catch (Throwable e) {
-                plugin.getPluginLogger().severe("An error occurred when reading packets", e);
+                plugin.getPluginLogger().severe("An error occurred when processing an outbound packet", e);
                 super.write(context, packet, channelPromise);
+                return;
             }
+            if (event.cancelled()) return;
+            super.write(context, packet, channelPromise);
+            event.runAfterSendTasks(e -> plugin.getPluginLogger().severe("An error occurred in an after-send packet task", e));
         }
     }
 

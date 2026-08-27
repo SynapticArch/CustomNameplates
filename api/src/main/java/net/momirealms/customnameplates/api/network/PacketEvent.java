@@ -20,18 +20,17 @@ package net.momirealms.customnameplates.api.network;
 import net.momirealms.customnameplates.common.event.Cancellable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * Represents a packet event, which can be cancelled and supports delayed tasks that are executed later.
  */
 public class PacketEvent implements Cancellable {
-
-    private boolean cancelled;
-    private List<Runnable> delayedTasks = null;
     private final Object packet;
+    private boolean cancelled;
+    private List<Runnable> afterSendTasks;
 
     /**
      * Constructs a new PacketEvent with the specified packet.
@@ -52,24 +51,39 @@ public class PacketEvent implements Cancellable {
     }
 
     /**
-     * Adds a task to be executed later, after the event has been processed.
+     * Registers a task that must run only after this packet has been forwarded
+     * to the next outbound handler.
      *
-     * @param task the task to be added
+     * @param task task to execute after the packet is sent
      */
-    public void addDelayedTask(Runnable task) {
-        if (delayedTasks == null) {
-            delayedTasks = new ArrayList<>();
+    public void afterSend(Runnable task) {
+        this.afterSendTasks().add(Objects.requireNonNull(task, "task"));
+    }
+
+    public List<Runnable> afterSendTasks() {
+        if (this.afterSendTasks == null) {
+            this.afterSendTasks = new ArrayList<>(1);
         }
-        delayedTasks.add(task);
+        return this.afterSendTasks;
     }
 
     /**
-     * Returns the list of delayed tasks to be executed.
+     * Executes and clears all registered after-send tasks. A failure in one
+     * task is reported without preventing the remaining tasks from running.
      *
-     * @return a list of tasks, or an empty list if no tasks are added
+     * @param exceptionHandler handler for failures raised by after-send tasks
      */
-    public List<Runnable> getDelayedTasks() {
-        return Optional.ofNullable(delayedTasks).orElse(Collections.emptyList());
+    public void runAfterSendTasks(Consumer<Throwable> exceptionHandler) {
+        if (this.afterSendTasks != null) {
+            Objects.requireNonNull(exceptionHandler, "exceptionHandler");
+            for (Runnable task : this.afterSendTasks) {
+                try {
+                    task.run();
+                } catch (Throwable throwable) {
+                    exceptionHandler.accept(throwable);
+                }
+            }
+        }
     }
 
     /**

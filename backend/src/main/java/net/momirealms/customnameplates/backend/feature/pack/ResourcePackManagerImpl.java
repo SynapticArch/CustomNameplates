@@ -33,7 +33,7 @@ import net.momirealms.customnameplates.api.feature.image.Animation;
 import net.momirealms.customnameplates.api.feature.image.Image;
 import net.momirealms.customnameplates.api.feature.nameplate.Nameplate;
 import net.momirealms.customnameplates.api.feature.pack.ResourcePackManager;
-import net.momirealms.customnameplates.api.helper.VersionHelper;
+import net.momirealms.customnameplates.api.helper.AdventureHelper;
 import net.momirealms.customnameplates.api.util.CharacterUtils;
 import net.momirealms.customnameplates.api.util.ZipUtils;
 import org.apache.commons.io.FileUtils;
@@ -72,31 +72,15 @@ public class ResourcePackManagerImpl implements ResourcePackManager {
         this.saveLegacyUnicodes();
 
         if (ConfigManager.enableShader()) {
-            if (VersionHelper.isVersionNewerThan1_21_2()) {
+            if (ConfigManager.minPackVersion() >= 21.4f) {
+                // do nothing
+            } else if (ConfigManager.minPackVersion() >= 21.2f) {
                 this.generateShaders("ResourcePack" + File.separator + "overlay_1_21_2" + File.separator + "assets" + File.separator + "minecraft" + File.separator + "shaders" + File.separator + "core" + File.separator, true);
-                try {
-                    FileUtils.copyDirectory(
-                            new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "overlay_1_21_2"),
-                            new File(plugin.getDataFolder(), "ResourcePack")
-                    );
-                    FileUtils.deleteDirectory(new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "overlay_1_21_2"));
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            } else if (VersionHelper.isVersionNewerThan1_20_5()) {
+            } else if (ConfigManager.minPackVersion() >= 20.5f) {
                 this.generateShaders("ResourcePack" + File.separator + "overlay_1_20_5" + File.separator + "assets" + File.separator + "minecraft" + File.separator + "shaders" + File.separator + "core" + File.separator, true);
-                try {
-                    FileUtils.copyDirectory(
-                            new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "overlay_1_20_5"),
-                            new File(plugin.getDataFolder(), "ResourcePack")
-                    );
-                    FileUtils.deleteDirectory(new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "overlay_1_20_5"));
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
                 this.generateShaders("ResourcePack" + File.separator + "overlay_1_21_2" + File.separator + "assets" + File.separator + "minecraft" + File.separator + "shaders" + File.separator + "core" + File.separator, true);
             } else {
-                this.generateShaders("ResourcePack" + File.separator + "assets" + File.separator + "minecraft" + File.separator + "shaders" + File.separator + "core" + File.separator, false);
+                this.generateShaders("ResourcePack" + File.separator + "overlay_1_20_2" + File.separator + "assets" + File.separator + "minecraft" + File.separator + "shaders" + File.separator + "core" + File.separator, false);
                 this.generateShaders("ResourcePack" + File.separator + "overlay_1_20_5" + File.separator + "assets" + File.separator + "minecraft" + File.separator + "shaders" + File.separator + "core" + File.separator, true);
                 this.generateShaders("ResourcePack" + File.separator + "overlay_1_21_2" + File.separator + "assets" + File.separator + "minecraft" + File.separator + "shaders" + File.separator + "core" + File.separator, true);
             }
@@ -195,11 +179,15 @@ public class ResourcePackManagerImpl implements ResourcePackManager {
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     private void setPackFormat() {
-        if (VersionHelper.isVersionNewerThan1_21_2()) {
+        if (ConfigManager.minPackVersion() >= 21.4f) {
+            plugin.getConfigManager().saveResource("ResourcePack" + File.separator + "pack_1_21_4.mcmeta");
+            File file = new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "pack_1_21_4.mcmeta");
+            file.renameTo(new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "pack.mcmeta"));
+        } else if (ConfigManager.minPackVersion() >= 21.2f) {
             plugin.getConfigManager().saveResource("ResourcePack" + File.separator + "pack_1_21_2.mcmeta");
             File file = new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "pack_1_21_2.mcmeta");
             file.renameTo(new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "pack.mcmeta"));
-        } else if (VersionHelper.isVersionNewerThan1_20_5()) {
+        } else if (ConfigManager.minPackVersion() >= 20.5f) {
             plugin.getConfigManager().saveResource("ResourcePack" + File.separator + "pack_1_20_5.mcmeta");
             File file = new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "pack_1_20_5.mcmeta");
             file.renameTo(new File(plugin.getDataFolder(), "ResourcePack" + File.separator + "pack.mcmeta"));

@@ -23,6 +23,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 
+/**
+ * Manages the nameplates system, providing functionality to retrieve, check access,
+ * and manipulate nameplates associated with players.
+ */
 public interface NameplateManager extends Reloadable {
 
     /**
@@ -33,6 +37,15 @@ public interface NameplateManager extends Reloadable {
      */
     @Nullable
     Nameplate nameplateById(String id);
+
+    /**
+     * Retrieves a Nameplate by command suggestion.
+     *
+     * @param suggestion the command suggestion of the nameplate
+     * @return the Nameplate instance, or null if not found
+     */
+    @Nullable
+    Nameplate nameplateByCommand(String suggestion);
 
     /**
      * Returns a collection of all available nameplates.

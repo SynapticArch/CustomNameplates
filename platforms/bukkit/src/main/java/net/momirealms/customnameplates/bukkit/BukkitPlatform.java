@@ -17,20 +17,31 @@
 
 package net.momirealms.customnameplates.bukkit;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonPrimitive;
 import it.unimi.dsi.fastutil.ints.IntList;
 import me.clip.placeholderapi.PlaceholderAPI;
+import net.kyori.adventure.key.Key;
+import net.kyori.adventure.nbt.api.BinaryTagHolder;
+import net.kyori.adventure.text.event.DataComponentValueConverterRegistry;
+import net.kyori.adventure.text.serializer.gson.GsonDataComponentValue;
 import net.momirealms.customnameplates.api.CNPlayer;
 import net.momirealms.customnameplates.api.ConfigManager;
 import net.momirealms.customnameplates.api.CustomNameplates;
 import net.momirealms.customnameplates.api.Platform;
 import net.momirealms.customnameplates.api.feature.bossbar.BossBar;
+import net.momirealms.customnameplates.api.feature.tag.NameTagConfig;
 import net.momirealms.customnameplates.api.helper.AdventureHelper;
+import net.momirealms.customnameplates.api.helper.GsonHelper;
 import net.momirealms.customnameplates.api.helper.VersionHelper;
 import net.momirealms.customnameplates.api.network.PacketEvent;
 import net.momirealms.customnameplates.api.network.Tracker;
 import net.momirealms.customnameplates.api.placeholder.DummyPlaceholder;
 import net.momirealms.customnameplates.api.placeholder.Placeholder;
 import net.momirealms.customnameplates.api.util.Alignment;
+import net.momirealms.customnameplates.api.util.Billboard;
 import net.momirealms.customnameplates.api.util.Vector3;
 import net.momirealms.customnameplates.backend.feature.actionbar.ActionBarManagerImpl;
 import net.momirealms.customnameplates.bukkit.util.BiomeUtils;
@@ -38,12 +49,26 @@ import net.momirealms.customnameplates.bukkit.util.EntityData;
 import net.momirealms.customnameplates.bukkit.util.Reflections;
 import net.momirealms.customnameplates.common.util.TriConsumer;
 import net.momirealms.customnameplates.common.util.UUIDUtils;
+import net.momirealms.sparrow.nbt.EndTag;
+import net.momirealms.sparrow.nbt.Tag;
+import net.momirealms.sparrow.nbt.codec.JsonOps;
+import net.momirealms.sparrow.nbt.codec.LegacyJavaOps;
+import net.momirealms.sparrow.nbt.codec.LegacyJsonOps;
+import net.momirealms.sparrow.nbt.codec.NBTOps;
+import net.momirealms.sparrow.nbt.parser.TagParser;
+import net.momirealms.sparrow.reflection.clazz.SparrowClass;
+import net.momirealms.sparrow.reflection.constructor.SConstructor2;
+import net.momirealms.sparrow.reflection.constructor.matcher.ConstructorMatcher;
+import net.momirealms.sparrow.reflection.field.SField;
+import net.momirealms.sparrow.reflection.field.matcher.FieldMatcher;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -56,6 +81,7 @@ public class BukkitPlatform implements Platform {
     private final boolean geyser;
     private final boolean floodGate;
     private final boolean libsDisguises;
+    private static Object serializer;
 
     private static final HashMap<String, TriConsumer<CNPlayer, PacketEvent, Object>> packetFunctions = new HashMap<>();
 
@@ -87,9 +113,17 @@ public class BukkitPlatform implements Platform {
         this.geyser = Bukkit.getPluginManager().getPlugin("Geyser-Spigot") != null;
         this.floodGate = Bukkit.getPluginManager().getPlugin("floodgate") != null;
         this.libsDisguises = Bukkit.getPluginManager().getPlugin("LibsDisguises") != null;
+        try {
+            Object builder = Reflections.method$GsonComponentSerializer$builder.invoke(null);
+            serializer = Reflections.method$GsonComponentSerializer$Builder$build.invoke(builder);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     static {
+        injectAdventure();
+
 //        ThrowableFunction<Object, String> scoreContentNameFunction = VersionHelper.isVersionNewerThan1_21_2() ? (o -> {
 //            @SuppressWarnings("unchecked")
 //            Optional<String> optional = (Optional<String>) Reflections.method$Either$right.invoke(o);
@@ -101,16 +135,33 @@ public class BukkitPlatform implements Platform {
             if (!player.shouldCNTakeOverActionBar()) return;
             try {
                 // some plugins would send null to clear the actionbar, what a bad solution
-                Object component = Optional.ofNullable(Reflections.field$ClientboundSetActionBarTextPacket$text.get(packet)).orElse(Reflections.instance$Component$empty);
-                Object contents = Reflections.method$Component$getContents.invoke(component);
-                if (Reflections.clazz$ScoreContents.isAssignableFrom(contents.getClass())) {
-                    //String name = scoreContentNameFunction.apply(Reflections.field$ScoreContents$name.get(contents));
-                    String objective = (String) Reflections.field$ScoreContents$objective.get(contents);
-                    if ("actionbar".equals(objective)) return;
+                Object component = Reflections.field$ClientboundSetActionBarTextPacket$text.get(packet);
+                if (component == null && !VersionHelper.isVersionNewerThan1_20_5()) {
+                    // paper api, must be from other plugins
+                    Object adventureComponent = Reflections.field$ClientboundSetActionBarTextPacket$adventure$text.get(packet);
+                    if (adventureComponent != null) {
+                        String json = (String) Reflections.method$ComponentSerializer$serialize.invoke(serializer, adventureComponent);
+                        CustomNameplates.getInstance().getScheduler().async().execute(() -> {
+                            ((ActionBarManagerImpl) CustomNameplates.getInstance().getActionBarManager()).handleActionBarPacket(player, AdventureHelper.jsonToMiniMessage(json));
+                        });
+                    } else {
+                        // bungeecord components ?
+                    }
+                } else {
+                    // mc components
+                    Object contents = Reflections.method$Component$getContents.invoke(component);
+                    if (contents == null) {
+                        return;
+                    }
+                    if (Reflections.clazz$ScoreContents.isAssignableFrom(contents.getClass())) {
+                        //String name = scoreContentNameFunction.apply(Reflections.field$ScoreContents$name.get(contents));
+                        String objective = (String) Reflections.field$ScoreContents$objective.get(contents);
+                        if ("actionbar".equals(objective)) return;
+                    }
+                    CustomNameplates.getInstance().getScheduler().async().execute(() -> {
+                        ((ActionBarManagerImpl) CustomNameplates.getInstance().getActionBarManager()).handleActionBarPacket(player, AdventureHelper.minecraftComponentToMiniMessage(component));
+                    });
                 }
-                CustomNameplates.getInstance().getScheduler().async().execute(() -> {
-                    ((ActionBarManagerImpl) CustomNameplates.getInstance().getActionBarManager()).handleActionBarPacket(player, AdventureHelper.minecraftComponentToMiniMessage(component));
-                });
             } catch (ReflectiveOperationException e) {
                 CustomNameplates.getInstance().getPluginLogger().severe("Failed to handle ClientboundSetActionBarTextPacket", e);
             }
@@ -118,9 +169,23 @@ public class BukkitPlatform implements Platform {
         }, "ClientboundSetActionBarTextPacket");
 
         registerPacketConsumer((player, event, packet) -> {
+            try {
+                Object gameProfile = Reflections.field$ClientboundLoginFinishedPacket$gameProfile.get(packet);
+                if (gameProfile != null) {
+                    String name = (String) Reflections.field$GameProfile$name.get(gameProfile);
+                    BukkitCNPlayer bukkitCNPlayer = (BukkitCNPlayer) player;
+                    bukkitCNPlayer.setName(name);
+                }
+            } catch (ReflectiveOperationException e) {
+                CustomNameplates.getInstance().getPluginLogger().severe("Failed to handle ClientboundGameProfilePacket", e);
+            }
+        }, "PacketLoginOutSuccess", "ClientboundLoginFinishedPacket", "ClientboundGameProfilePacket");
+
+        registerPacketConsumer((player, event, packet) -> {
             if (!ConfigManager.actionbarModule()) return;
             if (!ConfigManager.catchOtherActionBar()) return;
             if (!player.shouldCNTakeOverActionBar()) return;
+            if (player.player() == null) return;
             try {
             boolean actionBar = (boolean) Reflections.field$ClientboundSystemChatPacket$overlay.get(packet);
                 if (actionBar) {
@@ -167,9 +232,11 @@ public class BukkitPlatform implements Platform {
                 int entityID = (int) Reflections.field$ClientboundAddEntityPacket$entityId.get(packet);
                 CNPlayer added = CustomNameplates.getInstance().getPlayer(entityID);
                 if (added != null) {
-                    Tracker tracker = added.addPlayerToTracker(player);
-                    tracker.setSpectator(added.isSpectator());
-                    CustomNameplates.getInstance().getUnlimitedTagManager().onAddPlayer(added, player);
+                    event.afterSend(() -> {
+                        Tracker tracker = added.addPlayerToTracker(player);
+                        tracker.setSpectator(added.isSpectator());
+                        CustomNameplates.getInstance().getUnlimitedTagManager().onAddPlayer(added, player);
+                    });
                 }
             } catch (ReflectiveOperationException e) {
                 CustomNameplates.getInstance().getPluginLogger().severe("Failed to handle ClientboundAddEntityPacket", e);
@@ -183,9 +250,11 @@ public class BukkitPlatform implements Platform {
                 int entityID = (int) Reflections.field$PacketPlayOutNamedEntitySpawn$entityId.get(packet);
                 CNPlayer added = CustomNameplates.getInstance().getPlayer(entityID);
                 if (added != null) {
-                    Tracker tracker = added.addPlayerToTracker(player);
-                    tracker.setSpectator(added.isSpectator());
-                    CustomNameplates.getInstance().getUnlimitedTagManager().onAddPlayer(added, player);
+                    event.afterSend(() -> {
+                        Tracker tracker = added.addPlayerToTracker(player);
+                        tracker.setSpectator(added.isSpectator());
+                        CustomNameplates.getInstance().getUnlimitedTagManager().onAddPlayer(added, player);
+                    });
                 }
             } catch (ReflectiveOperationException e) {
                 CustomNameplates.getInstance().getPluginLogger().severe("Failed to handle PacketPlayOutNamedEntitySpawn", e);
@@ -305,15 +374,46 @@ public class BukkitPlatform implements Platform {
                         Object attributeHolder = Reflections.field$ClientboundUpdateAttributesPacket$AttributeSnapshot$attribute.get(attributeSnapshot);
                         Object attribute = Reflections.method$Holder$value.invoke(attributeHolder);
                         String id = (String) Reflections.field$Attribute$id.get(attribute);
-                        if (id.equals("attribute.name.generic.scale")) {
+                        if (id.endsWith("scale")) {
                             double baseValue = (double) Reflections.field$ClientboundUpdateAttributesPacket$AttributeSnapshot$base.get(attributeSnapshot);
                             @SuppressWarnings("unchecked")
                             Collection<Object> modifiers = (Collection<Object>) Reflections.field$ClientboundUpdateAttributesPacket$AttributeSnapshot$modifiers.get(attributeSnapshot);
-                            for (Object modifier : modifiers) {
-                                double amount = (double) Reflections.field$AttributeModifier$amount.get(modifier);
-                                baseValue += amount;
+                            int left = modifiers.size();
+                            if (left > 0) {
+                                for (Object modifier : modifiers) {
+                                    Object operation = Reflections.field$AttributeModifier$operation.get(modifier);
+                                    if (operation == Reflections.instance$AttributeModifier$Operation$ADD_VALUE) {
+                                        double amount = (double) Reflections.field$AttributeModifier$amount.get(modifier);
+                                        baseValue += amount;
+                                        left--;
+                                        if (left == 0) break;
+                                    }
+                                }
                             }
-                            CustomNameplates.getInstance().getUnlimitedTagManager().onPlayerAttributeSet(another, player, baseValue);
+                            double finalValue = baseValue;
+                            if (left > 0) {
+                                for (Object modifier : modifiers) {
+                                    Object operation = Reflections.field$AttributeModifier$operation.get(modifier);
+                                    if (operation == Reflections.instance$AttributeModifier$Operation$ADD_MULTIPLIED_BASE) {
+                                        double amount = (double) Reflections.field$AttributeModifier$amount.get(modifier);
+                                        finalValue += amount * baseValue;
+                                        left--;
+                                        if (left == 0) break;
+                                    }
+                                }
+                            }
+                            if (left > 0) {
+                                for (Object modifier : modifiers) {
+                                    Object operation = Reflections.field$AttributeModifier$operation.get(modifier);
+                                    if (operation == Reflections.instance$AttributeModifier$Operation$ADD_MULTIPLIED_TOTAL) {
+                                        double amount = (double) Reflections.field$AttributeModifier$amount.get(modifier);
+                                        finalValue *= 1.0 + amount;
+                                        left--;
+                                        if (left == 0) break;
+                                    }
+                                }
+                            }
+                            CustomNameplates.getInstance().getUnlimitedTagManager().onPlayerAttributeSet(another, player, finalValue);
                             return;
                         }
                     }
@@ -346,6 +446,7 @@ public class BukkitPlatform implements Platform {
         }, "ClientboundSetEntityDataPacket", "PacketPlayOutEntityMetadata");
 
         // not a perfect solution but would work in most cases
+        SField visibilityField = VersionHelper.isVersionNewerThan26_2() ? SparrowClass.of(Reflections.clazz$ClientboundSetPlayerTeamPacket$Parameters).getDeclaredSparrowField(FieldMatcher.named("nameTagVisibility")).mh() : null;
         registerPacketConsumer((player, event, packet) -> {
             if (!ConfigManager.nametagModule()) return;
             if (!ConfigManager.hideTeamNames()) return;
@@ -368,6 +469,10 @@ public class BukkitPlatform implements Platform {
                                     if (p == null) {
                                         return;
                                     }
+                                    // do not hide team name for the viewer
+                                    if (player.name().equals(entity)) {
+                                        return;
+                                    }
                                 }
                             }
                         }
@@ -375,7 +480,11 @@ public class BukkitPlatform implements Platform {
                         Optional<Object> optionalParameters = (Optional<Object>) Reflections.field$ClientboundSetPlayerTeamPacket$parameters.get(packet);
                         if (optionalParameters.isPresent()) {
                             Object parameters = optionalParameters.get();
-                            Reflections.field$ClientboundSetPlayerTeamPacket$Parameters$nametagVisibility.set(parameters, "never");
+                            if (VersionHelper.isVersionNewerThan26_2()) {
+                                visibilityField.set(parameters, Reflections.instance$Team$Visibility$NEVER);
+                            } else {
+                                Reflections.field$ClientboundSetPlayerTeamPacket$Parameters$nametagVisibility.set(parameters, VersionHelper.isVersionNewerThan1_21_5() ? Reflections.instance$Team$Visibility$NEVER : "never");
+                            }
                         }
                     }
                     // remove
@@ -395,6 +504,9 @@ public class BukkitPlatform implements Platform {
                                     if (p == null) {
                                         return;
                                     }
+                                    if (player.name().equals(entity)) {
+                                        return;
+                                    }
                                 }
                             }
                         }
@@ -402,7 +514,11 @@ public class BukkitPlatform implements Platform {
                         Optional<Object> optionalParameters = (Optional<Object>) Reflections.field$ClientboundSetPlayerTeamPacket$parameters.get(packet);
                         if (optionalParameters.isPresent()) {
                             Object parameters = optionalParameters.get();
-                            Reflections.field$ClientboundSetPlayerTeamPacket$Parameters$nametagVisibility.set(parameters, "never");
+                            if (VersionHelper.isVersionNewerThan26_2()) {
+                                visibilityField.set(parameters, Reflections.instance$Team$Visibility$NEVER);
+                            } else {
+                                Reflections.field$ClientboundSetPlayerTeamPacket$Parameters$nametagVisibility.set(parameters, VersionHelper.isVersionNewerThan1_21_5() ? Reflections.instance$Team$Visibility$NEVER : "never");
+                            }
                         }
                     }
                     // add members
@@ -426,35 +542,19 @@ public class BukkitPlatform implements Platform {
 
     @Override
     public Object jsonToMinecraftComponent(String json) {
-        if (VersionHelper.isVersionNewerThan1_20_5()) {
-            try {
-                return Reflections.method$Component$Serializer$fromJson.invoke(null, json, Reflections.instance$MinecraftRegistry);
-            } catch (ReflectiveOperationException e) {
-                throw new RuntimeException(e);
-            }
-        } else {
-            try {
-                return Reflections.method$CraftChatMessage$fromJSON.invoke(null, json);
-            } catch (ReflectiveOperationException e) {
-                throw new RuntimeException(e);
-            }
+        try {
+            return Reflections.method$CraftChatMessage$fromJSON.invoke(null, json);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
         }
     }
 
     @Override
     public String minecraftComponentToJson(Object component) {
-        if (VersionHelper.isVersionNewerThan1_20_5()) {
-            try {
-                return (String) Reflections.method$Component$Serializer$toJson.invoke(null, component, Reflections.instance$MinecraftRegistry);
-            } catch (ReflectiveOperationException e) {
-                throw new RuntimeException(e);
-            }
-        } else {
-            try {
-                return (String) Reflections.method$CraftChatMessage$toJSON.invoke(null, component);
-            } catch (ReflectiveOperationException e) {
-                throw new RuntimeException(e);
-            }
+        try {
+            return (String) Reflections.method$CraftChatMessage$toJSON.invoke(null, component);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -466,15 +566,32 @@ public class BukkitPlatform implements Platform {
         Placeholder placeholder;
         if (id.startsWith("%rel_")) {
             placeholder = plugin.getPlaceholderManager().registerRelationalPlaceholder(id,
-                                                                        // viewer              // owner
-                    (p1, p2) -> PlaceholderAPI.setRelationalPlaceholders((Player) p2.player(), (Player) p1.player(), id));
+                    (p1, p2) -> {
+                        try {
+                            return PlaceholderAPI.setRelationalPlaceholders((Player) p2.player(), (Player) p1.player(), id);
+                        } catch (Exception e) {
+                            return id;
+                        }
+                    });
         } else if (id.startsWith("%shared_")) {
             String sub = "%" + id.substring("%shared_".length());
             placeholder =plugin.getPlaceholderManager().registerSharedPlaceholder(id,
-                    () -> PlaceholderAPI.setPlaceholders(null, sub));
+                    () -> {
+                        try {
+                            return PlaceholderAPI.setPlaceholders(null, sub);
+                        } catch (Exception e) {
+                            return sub;
+                        }
+                    });
         } else {
             placeholder = plugin.getPlaceholderManager().registerPlayerPlaceholder(id,
-                    (p) -> p == null ? PlaceholderAPI.setPlaceholders(null, id) : PlaceholderAPI.setPlaceholders((OfflinePlayer) p.player(), id));
+                    (p) -> {
+                        try {
+                            return p == null ? PlaceholderAPI.setPlaceholders(null, id) : PlaceholderAPI.setPlaceholders((OfflinePlayer) p.player(), id);
+                        } catch (Exception e) {
+                            return id;
+                        }
+                    });
         }
         return placeholder;
     }
@@ -533,9 +650,8 @@ public class BukkitPlatform implements Platform {
             int interpolationDelay, int transformationInterpolationDuration, int positionRotationInterpolationDuration,
             Object component, int backgroundColor, byte opacity,
             boolean hasShadow, boolean isSeeThrough, boolean useDefaultBackgroundColor, Alignment alignment,
-            float viewRange, float shadowRadius, float shadowStrength,
-            Vector3 scale, Vector3 translation, int lineWidth, boolean isCrouching
-    ) {
+            Billboard billboard, float viewRange, float shadowRadius, float shadowStrength,
+            Vector3 scale, Vector3 translation, int lineWidth, boolean isCrouching) {
         try {
             Object addEntityPacket = Reflections.constructor$ClientboundAddEntityPacket.newInstance(
                     entityID, uuid, position.x(), position.y(), position.z(), pitch, yaw,
@@ -551,7 +667,7 @@ public class BukkitPlatform implements Platform {
             } else {
                 EntityData.InterpolationDuration.addEntityDataIfNotDefaultValue(transformationInterpolationDuration, values);
             }
-            EntityData.BillboardConstraints.addEntityDataIfNotDefaultValue((byte) 3,                     values);
+            EntityData.BillboardConstraints.addEntityDataIfNotDefaultValue(billboard.id(),               values);
             EntityData.BackgroundColor.addEntityDataIfNotDefaultValue(     backgroundColor,              values);
             EntityData.Text.addEntityDataIfNotDefaultValue(                component,                    values);
             EntityData.TextOpacity.addEntityDataIfNotDefaultValue(         isCrouching ? 64 : opacity,   values);
@@ -601,8 +717,11 @@ public class BukkitPlatform implements Platform {
     }
 
     @Override
-    public Consumer<List<Object>> createOpacityModifier(byte opacity) {
-        return (values) -> EntityData.TextOpacity.addEntityData(opacity, values);
+    public Consumer<List<Object>> createSneakModifier(boolean sneak, boolean seeThrough, NameTagConfig config) {
+        return (values) -> {
+            EntityData.TextOpacity.addEntityData(sneak ? 64 : config.opacity(), values);
+            EntityData.TextDisplayMasks.addEntityData(EntityData.encodeMask(config.hasShadow(), seeThrough, config.useDefaultBackgroundColor(), config.alignment().getId()), values);
+        };
     }
 
     @Override
@@ -679,5 +798,39 @@ public class BukkitPlatform implements Platform {
     private void handlePacket(CNPlayer player, PacketEvent event, Object packet) {
         Optional.ofNullable(packetFunctions.get(packet.getClass().getSimpleName()))
                 .ifPresent(function -> function.accept(player, event, packet));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void injectAdventure() {
+        Map<Class<?>, Map<Class<?>, Object>> CACHE = (Map<Class<?>, Map<Class<?>, Object>>) SparrowClass.of(SparrowClass.find("net.kyori.adventure.text.event.DataComponentValueConverterRegistry$ConversionCache"))
+                .getDeclaredSparrowField(FieldMatcher.named("CACHE"))
+                .mh()
+                .get(null);
+        Class<?> tagClass = SparrowClass.find("net.kyori.adventure.nbt.api.BinaryTagHolderImpl");
+        DataComponentValueConverterRegistry.Conversion<BinaryTagHolder, GsonDataComponentValue> convertor1 = DataComponentValueConverterRegistry.Conversion.convert(
+                BinaryTagHolder.class,
+                GsonDataComponentValue.class,
+                (key, srcValue) -> {
+                    try {
+                        Tag tag = TagParser.parseTagFully(srcValue.string());
+                        if (tag == EndTag.INSTANCE) {
+                            return GsonDataComponentValue.gsonDataComponentValue(JsonNull.INSTANCE);
+                        } else {
+                            if (VersionHelper.isVersionNewerThan1_20_5()) {
+                                return GsonDataComponentValue.gsonDataComponentValue(NBTOps.INSTANCE.convertTo(JsonOps.INSTANCE, tag));
+                            } else {
+                                return GsonDataComponentValue.gsonDataComponentValue(LegacyJavaOps.INSTANCE.convertTo(LegacyJsonOps.INSTANCE, tag));
+                            }
+                        }
+                    } catch (Throwable e) {
+                        return GsonDataComponentValue.gsonDataComponentValue(JsonNull.INSTANCE);
+                    }
+                }
+        );
+        SConstructor2 constructor = SparrowClass.of(SparrowClass.find("net.kyori.adventure.text.event.DataComponentValueConverterRegistry$RegisteredConversion"))
+                .getDeclaredSparrowConstructor(ConstructorMatcher.takeArguments(Key.class, DataComponentValueConverterRegistry.Conversion.class))
+                .asm$2();
+        CACHE.computeIfAbsent(tagClass, $ -> new ConcurrentHashMap<>())
+                .computeIfAbsent(GsonDataComponentValue.class, $ -> constructor.newInstance(Key.key("nameplates", "serializer/nbt"), convertor1));
     }
 }
